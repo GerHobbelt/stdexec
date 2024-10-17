@@ -40,7 +40,7 @@ exec::task<std::optional<stdexec::inplace_stop_token>> async_stop_token() {
   co_return co_await stopped_as_optional(get_stop_token());
 }
 
-int main() {
+int main(void) {
   try {
     // Awaitables are implicitly senders:
     auto [i] = stdexec::sync_wait(async_answer2(just(42), just())).value();
@@ -50,6 +50,6 @@ int main() {
   }
 }
 #else
-int main() {
+int main(void) {
 }
 #endif

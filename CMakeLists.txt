@@ -385,7 +385,7 @@ else()
 
     #include <cstdlib>
 
-    int main()
+    int main(void)
     {
       io_uring_params a = {};
       return syscall(__NR_io_uring_setup, 1, &a) != -1

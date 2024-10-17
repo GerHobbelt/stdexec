@@ -23,7 +23,7 @@ struct split_bug : rl::test_suite<split_bug, 1> {
   }
 };
 
-int main() {
+int main(void) {
   rl::test_params p;
   p.iteration_count = 50000;
   p.execution_depth_limit = 10000;

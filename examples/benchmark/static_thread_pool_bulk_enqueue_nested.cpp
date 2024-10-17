@@ -61,6 +61,6 @@ int main(int argc, char** argv) {
   my_main<exec::static_thread_pool, RunThread>(argc, argv);
 }
 #else
-int main() {
+int main(void) {
 }
 #endif

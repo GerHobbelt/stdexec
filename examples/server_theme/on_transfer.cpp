@@ -81,7 +81,7 @@ void process_read_data(const char* read_data, size_t read_len) {
   sync_stream{std::cout} << "Processing '" << std::string_view{read_data, read_len} << "'\n";
 }
 
-int main() {
+int main(void) {
   // Create a thread pool and get a scheduler from it
   exec::static_thread_pool work_pool{8};
   ex::scheduler auto work_sched = work_pool.get_scheduler();

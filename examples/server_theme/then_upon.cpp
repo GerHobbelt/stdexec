@@ -169,7 +169,7 @@ ex::sender auto handle_classify_request(const http_request& req) {
     ;
 }
 
-int main() {
+int main(void) {
   // Create a thread pool and get a scheduler from it
   exec::async_scope scope;
   exec::static_thread_pool pool{8};

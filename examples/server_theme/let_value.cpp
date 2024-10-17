@@ -119,7 +119,7 @@ ex::sender auto stopped_to_response() {
   return ex::just(http_response{503, "Service temporarily unavailable"});
 }
 
-int main() {
+int main(void) {
   // Create a thread pool and get a scheduler from it
   exec::static_thread_pool pool{8};
   ex::scheduler auto sched = pool.get_scheduler();

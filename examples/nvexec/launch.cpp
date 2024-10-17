@@ -35,7 +35,7 @@ int bench() {
   return std::accumulate(input.begin(), input.end(), 0);
 }
 
-int main() {
+int main(void) {
   thrust::device_vector<int> input(N, 0);
   std::iota(input.begin(), input.end(), 1);
   int* first = thrust::raw_pointer_cast(input.data());

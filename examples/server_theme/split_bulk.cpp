@@ -165,7 +165,7 @@ ex::sender auto handle_multi_blur_request(const http_request& req) {
     ;
 }
 
-int main() {
+int main(void) {
   // Create a thread pool and get a scheduler from it
   exec::static_thread_pool pool{8};
   exec::async_scope scope;

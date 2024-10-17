@@ -49,7 +49,7 @@ struct fail_some {
   }
 };
 
-int main() {
+int main(void) {
   auto x = retry(fail_some{});
   // prints:
   //   fail!

@@ -46,7 +46,7 @@ struct noop_receiver {
   }
 };
 
-int main() {
+int main(void) {
   exec::static_thread_pool ctx{1};
   exec::async_scope scope;
 

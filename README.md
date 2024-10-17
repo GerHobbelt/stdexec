@@ -24,7 +24,7 @@ Try it live on [godbolt!](https://godbolt.org/z/3cseorf7M).
 #include <stdexec/execution.hpp>
 #include <exec/static_thread_pool.hpp>
 
-int main()
+int main(void)
 {
     // Declare a pool of 3 worker threads:
     exec::static_thread_pool pool(3);
