@@ -329,9 +329,15 @@ namespace stdexec {
   template <class... _Args>
   concept _Ok = (STDEXEC_IS_SAME(__ok_t<_Args>, __msuccess) && ...);
 
-  //! If both are true:
-  //! Then __i<true, true>::__g<F, Args...> is an alias for F<Args...>
-  //! and __i<true, true>::__f<F> is an alias for F. 
+  //! The struct `__i` is the implementation of P2300's  
+  //! [_`META-APPLY`_](https://eel.is/c++draft/exec#util.cmplsig-5).
+  //! > [Note [1](https://eel.is/c++draft/exec#util.cmplsig-note-1): 
+  //! > The purpose of META-APPLY is to make it valid to use non-variadic 
+  //! > templates as Variant and Tuple arguments to gather-signatures. — end note]
+  //! In addition to avoiding the dreaded "pack expanded into non-pack argument" error,
+  //! it is part of the meta-error propagation mechanism. if any of the argument types 
+  //! are a specialization of `_ERROR_`, `__i` will short-circuit and return the error.
+  //! `__minvoke` and `__meval` are implemented in terms of `__i`.
   template <bool _ArgsOK, bool _FnOK = true>
   struct __i;
 
@@ -424,7 +430,14 @@ namespace stdexec {
     using __f = _Fn;
   };
 
-  //! Metafunction takes a function and provides a checked version of it?
+  //! This struct template is like [mpl::quote](https://www.boost.org/doc/libs/1_86_0/libs/mpl/doc/refmanual/quote.html).
+  //! It turns an alias/class template into a metafunction that also propagates "meta-exceptions".
+  //! All of the meta utilities recognize specializations of stdexec::_ERROR_ as an error type. 
+  //! Error types short-circuit the evaluation of the metafunction and are automatically propagated like an exception. 
+  //! Note: `__minvoke` and `__meval` also participate in this error propagation.
+  //!
+  //! This design lets us report type errors briefly at the library boundary, even if the 
+  //! actual error happens deep inside a meta-program.
   template <template <class...> class _Fn>
   struct __q {
     template <class... _Args>
@@ -512,7 +525,7 @@ namespace stdexec {
 
   struct __if_ {
     //! Metafunction selects `_True` if the bool template is `true`, otherwise the second.
-    //! That is, `__<true>::__f<A, B>` is `A` and `__false<>::__f<A, B>` is B.
+    //! That is, `__<true>::__f<A, B>` is `A` and `__<false>::__f<A, B>` is B.
     //! This is similar to `std::conditional_t<Cond, A, B>`.
     template <bool>
     struct __ {
