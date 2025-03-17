@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 NVIDIA Corporation
+ * Copyright (c) 2024 Lauri Vasama
  *
  * Licensed under the Apache License Version 2.0 with LLVM Exceptions
  * (the "License"); you may not use this file except in compliance with
@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
-#include <stdexec/execution.hpp>
+#pragma once
 
-namespace ex = stdexec;
+#include <catch2/catch.hpp>
 
-int main(void) {
-  ex::sender auto snd = ex::just(42) | ex::then([](int*) { });
-  // build error: _NOT_CALLABLE_.*_WITH_FUNCTION_.*_WITH_ARGUMENTS_<int>
-  stdexec::sync_wait(std::move(snd));
-}
+#include <tuple>
+
+// Workaround for https://github.com/llvm/llvm-project/issues/113087
+#if defined(__clang__) && defined(__cpp_lib_tuple_like)
+#  define CHECK_TUPLE(...) CHECK((__VA_ARGS__))
+#else
+#  define CHECK_TUPLE CHECK
+#endif
