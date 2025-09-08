@@ -174,70 +174,64 @@ namespace nvexec::_strm {
     };
 
     template <class... _Ty>
-    using value_completions_t = //
-      completion_signatures<set_value_t(__decay_t<_Ty>...)>;
+    using value_completions_t = completion_signatures<set_value_t(__decay_t<_Ty>...)>;
 
     template <class _Ty>
-    using error_completions_t = //
-      completion_signatures<set_error_t(__decay_t<_Ty>)>;
+    using error_completions_t = completion_signatures<set_error_t(__decay_t<_Ty>)>;
   } // namespace _sched_from
 
   template <class Scheduler, class SenderId>
   struct schedule_from_sender_t {
     using Sender = stdexec::__t<SenderId>;
+    using LateDomain = __query_result_or_t<get_domain_t, Scheduler, default_domain>;
     using source_sender_th = _sched_from::source_sender_t<Sender>;
-
-    struct __env {
-      context_state_t context_state_;
-
-      template <class _Tag>
-      auto query(get_completion_scheduler_t<_Tag>) const noexcept -> Scheduler {
-        return {context_state_};
-      }
-    };
 
     struct __t : stream_sender_base {
       using __id = schedule_from_sender_t;
-      __env env_;
+
+      Scheduler sched_;
       source_sender_th sndr_;
 
       template <class Self, class Receiver>
-      using receiver_t = //
+      using receiver_t =
         stdexec::__t<_sched_from::receiver_t<__cvref_id<Self, Sender>, stdexec::__id<Receiver>>>;
 
       template <__decays_to<__t> Self, receiver Receiver>
         requires sender_to<__copy_cvref_t<Self, source_sender_th>, Receiver>
-      static auto connect(Self&& self, Receiver rcvr) //
-        -> stream_op_state_t<
-          __copy_cvref_t<Self, source_sender_th>,
-          receiver_t<Self, Receiver>,
-          Receiver> {
-        return stream_op_state<__copy_cvref_t<Self, source_sender_th>>(
+      static auto connect(Self&& self, Receiver rcvr) -> stream_op_state_t<
+        __copy_cvref_t<Self, source_sender_th>,
+        receiver_t<Self, Receiver>,
+        Receiver
+      > {
+        auto receiver_factory =
+          [&](operation_state_base_t<stdexec::__id<Receiver>>& stream_provider)
+          -> receiver_t<Self, Receiver> {
+          return receiver_t<Self, Receiver>{{}, stream_provider};
+        };
+        using cvref_source_sender_t = __copy_cvref_t<Self, source_sender_th>;
+        return _strm::stream_op_state<cvref_source_sender_t>(
           static_cast<Self&&>(self).sndr_,
           static_cast<Receiver&&>(rcvr),
-          [&](operation_state_base_t<stdexec::__id<Receiver>>& stream_provider)
-            -> receiver_t<Self, Receiver> {
-            return receiver_t<Self, Receiver>{{}, stream_provider};
-          },
-          self.env_.context_state_);
+          receiver_factory,
+          self.sched_.context_state_);
       }
 
-      auto get_env() const noexcept -> const __env& {
-        return env_;
+      auto get_env() const noexcept -> __sched_attrs<Scheduler, LateDomain> {
+        return {sched_, {}};
       }
 
       template <__decays_to<__t> _Self, class... _Env>
-      static auto get_completion_signatures(_Self&&, _Env&&...) //
-        -> transform_completion_signatures<
-          __completion_signatures_of_t<__copy_cvref_t<_Self, Sender>, _Env...>,
-          completion_signatures<set_error_t(cudaError_t)>,
-          _sched_from::value_completions_t,
-          _sched_from::error_completions_t> {
+      static auto get_completion_signatures(_Self&&, _Env&&...) -> transform_completion_signatures<
+        __completion_signatures_of_t<__copy_cvref_t<_Self, Sender>, _Env...>,
+        completion_signatures<set_error_t(cudaError_t)>,
+        _sched_from::value_completions_t,
+        _sched_from::error_completions_t
+      > {
         return {};
       }
 
-      __t(context_state_t context_state, Sender sndr)
-        : env_{context_state}
+      __t(Scheduler sched, Sender sndr)
+        : sched_(sched)
         , sndr_{{}, static_cast<Sender&&>(sndr)} {
       }
     };
@@ -247,9 +241,8 @@ namespace nvexec::_strm {
   struct transform_sender_for<stdexec::schedule_from_t> {
     template <gpu_stream_scheduler Sched, class Sender>
     auto operator()(__ignore, Sched sched, Sender&& sndr) const {
-      using __sender_t =
-        stdexec::__t<schedule_from_sender_t<stream_scheduler, __id<__decay_t<Sender>>>>;
-      return __sender_t{sched.context_state_, static_cast<Sender&&>(sndr)};
+      using __sender_t = stdexec::__t<schedule_from_sender_t<Sched, __id<__decay_t<Sender>>>>;
+      return __sender_t{sched, static_cast<Sender&&>(sndr)};
     }
   };
 } // namespace nvexec::_strm

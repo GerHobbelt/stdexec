@@ -58,10 +58,10 @@
 // is notified.
 namespace stdexec::__shared {
   template <class _BaseEnv>
-  using __env_t = //
-    __join_env_t<
-      prop<get_stop_token_t, inplace_stop_token>,
-      _BaseEnv>; // BUGBUG NOT TO SPEC
+  using __env_t = __join_env_t<
+    prop<get_stop_token_t, inplace_stop_token>,
+    _BaseEnv
+  >; // BUGBUG NOT TO SPEC
 
   template <class _Receiver>
   auto __make_notify_visitor(_Receiver& __rcvr) noexcept {
@@ -76,6 +76,10 @@ namespace stdexec::__shared {
 
   struct __local_state_base : __immovable {
     using __notify_fn = void(__local_state_base*) noexcept;
+
+    void __notify() noexcept {
+      __notify_(this);
+    }
 
     __notify_fn* __notify_{};
     __local_state_base* __next_{};
@@ -116,7 +120,7 @@ namespace stdexec::__shared {
         //   1. It was already removed by another thread, or
         //   2. It hasn't been added yet (see `start` below), or
         //   3. The underlying operation has already completed.
-        //
+
         // In each case, the right thing to do is nothing. If (1) then we raced with another
         // thread and lost. In that case, the other thread will take care of it. If (2) then
         // `start` will take care of it. If (3) then this stop request is safe to ignore.
@@ -173,16 +177,18 @@ namespace stdexec::__shared {
       using __id = __receiver;
 
       template <class... _As>
-        STDEXEC_ATTRIBUTE((always_inline)) void set_value(_As&&... __as) noexcept {
+      STDEXEC_ATTRIBUTE(always_inline)
+      void set_value(_As&&... __as) noexcept {
         __sh_state_->__complete(set_value_t(), static_cast<_As&&>(__as)...);
       }
 
       template <class _Error>
-        STDEXEC_ATTRIBUTE((always_inline)) void set_error(_Error&& __err) noexcept {
+      STDEXEC_ATTRIBUTE(always_inline)
+      void set_error(_Error&& __err) noexcept {
         __sh_state_->__complete(set_error_t(), static_cast<_Error&&>(__err));
       }
 
-      STDEXEC_ATTRIBUTE((always_inline)) void set_stopped() noexcept {
+      STDEXEC_ATTRIBUTE(always_inline) void set_stopped() noexcept {
         __sh_state_->__complete(set_stopped_t());
       }
 
@@ -195,25 +201,20 @@ namespace stdexec::__shared {
     };
   };
 
-  inline auto __get_tombstone() noexcept -> __local_state_base* {
-    static constinit __local_state_base __tombstone_{{}, nullptr, nullptr};
-    return &__tombstone_;
-  }
-
   //! Heap-allocatable shared state for things like `stdexec::split`.
   template <class _CvrefSender, class _Env>
   struct __shared_state {
     using __receiver_t = __t<__receiver<__cvref_id<_CvrefSender>, __id<_Env>>>;
     using __waiters_list_t = __intrusive_slist<&__local_state_base::__next_>;
 
-    using __variant_t = //
-      __transform_completion_signatures<
-        __completion_signatures_of_t<_CvrefSender, _Env>,
-        __mbind_front_q<__decayed_tuple, set_value_t>::__f,
-        __mbind_front_q<__decayed_tuple, set_error_t>::__f,
-        __tuple_for<set_error_t, std::exception_ptr>,
-        __munique<__mbind_front_q<__variant_for, __tuple_for<set_stopped_t>>>::__f,
-        __tuple_for<set_error_t, std::exception_ptr>>;
+    using __variant_t = __transform_completion_signatures<
+      __completion_signatures_of_t<_CvrefSender, _Env>,
+      __mbind_front_q<__decayed_tuple, set_value_t>::__f,
+      __mbind_front_q<__decayed_tuple, set_error_t>::__f,
+      __tuple_for<set_error_t, std::exception_ptr>,
+      __munique<__mbind_front_q<__variant_for, __tuple_for<set_stopped_t>>>::__f,
+      __tuple_for<set_error_t, std::exception_ptr>
+    >;
 
     inplace_stop_source __stop_source_{};
     __env_t<_Env> __env_;
@@ -223,13 +224,14 @@ namespace stdexec::__shared {
     connect_result_t<_CvrefSender, __receiver_t> __shared_op_;
     std::atomic_flag __started_{};
     std::atomic<std::size_t> __ref_count_{2};
+    __local_state_base __tombstone_{};
 
     // Let a "consumer" be either a split/ensure_started sender, or an operation
     // state created by connecting a split/ensure_started sender to a receiver.
     // Let is_running be 1 if the shared operation is currently executing (after
     // start has been called but before the receiver's completion functions have
     // executed), and 0 otherwise. Then __ref_count_ is equal to:
-    //
+
     // (2 * (nbr of consumers)) + is_running
 
     explicit __shared_state(_CvrefSender&& __sndr, _Env __env)
@@ -297,10 +299,10 @@ namespace stdexec::__shared {
     template <class _StopToken>
     auto __try_add_waiter(__local_state_base* __waiter, _StopToken __stok) noexcept -> bool {
       std::unique_lock __lock{__mutex_};
-      if (__waiters_.front() == __get_tombstone()) {
+      if (__waiters_.front() == &__tombstone_) {
         // The work has already completed. Notify the waiter immediately.
         __lock.unlock();
-        __waiter->__notify_(__waiter);
+        __waiter->__notify();
         return true;
       } else if (__stok.stop_requested()) {
         // Stop has been requested. Do not add the waiter.
@@ -330,7 +332,7 @@ namespace stdexec::__shared {
     /// @brief This is called when the shared async operation completes.
     /// @post __waiters_ is set to a known "tombstone" value.
     void __notify_waiters() noexcept {
-      __waiters_list_t __waiters_copy{__get_tombstone()};
+      __waiters_list_t __waiters_copy{&__tombstone_};
 
       // Set the waiters list to a known "tombstone" value that we can check later.
       {
@@ -338,7 +340,7 @@ namespace stdexec::__shared {
         __waiters_.swap(__waiters_copy);
       }
 
-      STDEXEC_ASSERT(__waiters_copy.front() != __get_tombstone());
+      STDEXEC_ASSERT(__waiters_copy.front() != &__tombstone_);
       for (auto __itr = __waiters_copy.begin(); __itr != __waiters_copy.end();) {
         __local_state_base* __item = *__itr;
 
@@ -346,7 +348,7 @@ namespace stdexec::__shared {
         // triggering *__item to be destructed on another thread, and the intrusive slist's
         // iterator increment relies on __item.
         ++__itr;
-        __item->__notify_(__item);
+        __item->__notify();
       }
 
       // Set the "is running" bit in the ref count to zero. Delete the shared state if the
@@ -359,28 +361,29 @@ namespace stdexec::__shared {
   __shared_state(_CvrefSender&&, _Env) -> __shared_state<_CvrefSender, _Env>;
 
   template <class _Cvref, class _CvrefSender, class _Env>
-  using __make_completions = //
-    __try_make_completion_signatures<
-      // NOT TO SPEC:
-      // See https://github.com/cplusplus/sender-receiver/issues/23
-      _CvrefSender,
-      __env_t<_Env>,
-      completion_signatures<
-        set_error_t(__minvoke<_Cvref, std::exception_ptr>),
-        set_stopped_t()>, // NOT TO SPEC
-      __mtransform<_Cvref, __mcompose<__q<completion_signatures>, __qf<set_value_t>>>,
-      __mtransform<_Cvref, __mcompose<__q<completion_signatures>, __qf<set_error_t>>>>;
+  using __make_completions = __try_make_completion_signatures<
+    // NOT TO SPEC:
+    // See https://github.com/cplusplus/sender-receiver/issues/23
+    _CvrefSender,
+    __env_t<_Env>,
+    completion_signatures<
+      set_error_t(__minvoke<_Cvref, std::exception_ptr>),
+      set_stopped_t()
+    >, // NOT TO SPEC
+    __mtransform<_Cvref, __mcompose<__q<completion_signatures>, __qf<set_value_t>>>,
+    __mtransform<_Cvref, __mcompose<__q<completion_signatures>, __qf<set_error_t>>>
+  >;
 
   // split completes with const T&. ensure_started completes with T&&.
   template <class _Tag>
-  using __cvref_results_t = //
+  using __cvref_results_t =
     __mcompose<__if_c<same_as<_Tag, __split::__split_t>, __cpclr, __cp>, __q<__decay_t>>;
 
   // NOTE: the use of __mapply in the return type below takes advantage of the fact that _ShState
   // denotes an instance of the __shared_state template, which is parameterized on the
   // cvref-qualified sender and the environment.
   template <class _Tag, class _ShState>
-  using __completions = //
+  using __completions =
     __mapply<__mbind_front_q<__make_completions, __cvref_results_t<_Tag>>, _ShState>;
 
   template <class _CvrefSender, class _Env, bool _Copyable = true>
@@ -412,8 +415,7 @@ namespace stdexec::__shared {
   };
 
   template <class _CvrefSender, class _Env>
-  __box(__split::__split_t, __shared_state<_CvrefSender, _Env>*) //
-    ->__box<_CvrefSender, _Env, true>;
+  __box(__split::__split_t, __shared_state<_CvrefSender, _Env>*) -> __box<_CvrefSender, _Env, true>;
 
   template <class _CvrefSender, class _Env>
   __box(__ensure_started::__ensure_started_t, __shared_state<_CvrefSender, _Env>*)
@@ -421,24 +423,23 @@ namespace stdexec::__shared {
 
   template <class _Tag>
   struct __shared_impl : __sexpr_defaults {
-    static constexpr auto get_state = //
+    static constexpr auto get_state =
       []<class _CvrefSender, class _Receiver>(_CvrefSender&& __sndr, _Receiver&) noexcept
       -> __local_state<_CvrefSender, _Receiver> {
       static_assert(sender_expr_for<_CvrefSender, _Tag>);
       return __local_state<_CvrefSender, _Receiver>{static_cast<_CvrefSender&&>(__sndr)};
     };
 
-    static constexpr auto get_completion_signatures = //
+    static constexpr auto get_completion_signatures =
       []<class _Self>(const _Self&, auto&&...) noexcept
       -> __completions<_Tag, typename __data_of<_Self>::__sh_state_t> {
       static_assert(sender_expr_for<_Self, _Tag>);
       return {};
     };
 
-    static constexpr auto start = //
-      []<class _Sender, class _Receiver>(
-        __local_state<_Sender, _Receiver>& __self,
-        _Receiver& __rcvr) noexcept -> void {
+    static constexpr auto start = []<class _Sender, class _Receiver>(
+                                    __local_state<_Sender, _Receiver>& __self,
+                                    _Receiver& __rcvr) noexcept -> void {
       // Scenario: there are no more split senders, this is the only operation state, the
       // underlying operation has not yet been started, and the receiver's stop token is already
       // in the "stop requested" state. Then registering the stop callback will call

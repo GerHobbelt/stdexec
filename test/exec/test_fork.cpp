@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "exec/fork.hpp"
+#include "exec/fork_join.hpp"
 #include "exec/just_from.hpp"
 #include "test_common/type_helpers.hpp"
 
@@ -23,29 +23,31 @@
 using namespace stdexec;
 
 namespace {
-  TEST_CASE("fork is a sender", "[adaptors][fork]") {
-    auto sndr = exec::fork(just(), then([] { }));
+  TEST_CASE("fork_join is a sender", "[adaptors][fork_join]") {
+    auto sndr = exec::fork_join(just(), then([] { }));
     STATIC_REQUIRE(sender<decltype(sndr)>);
   }
 
-  TEST_CASE("fork is a sender in empty env", "[adaptors][fork]") {
-    auto sndr = exec::fork(just(), then([] { }));
+  TEST_CASE("fork_join is a sender in empty env", "[adaptors][fork_join]") {
+    auto sndr = exec::fork_join(just(), then([] { }));
     STATIC_REQUIRE(sender_in<decltype(sndr), env<>>);
     STATIC_REQUIRE(
       set_equivalent<
         completion_signatures_of_t<decltype(sndr), env<>>,
-        completion_signatures<set_value_t(), set_error_t(std::exception_ptr), set_stopped_t()>>);
+        completion_signatures<set_value_t(), set_error_t(std::exception_ptr), set_stopped_t()>
+      >);
   }
 
-  TEST_CASE("fork broadcasts results to multiple continuations", "[adaptors][fork]") {
+  TEST_CASE("fork_join broadcasts results to multiple continuations", "[adaptors][fork_join]") {
     auto fn = [](auto sink) {
       sink(42);
       return completion_signatures<
         set_value_t(int),
         set_value_t(int, int),
-        set_value_t(int, int, int)>{};
+        set_value_t(int, int, int)
+      >{};
     };
-    auto sndr = exec::fork(
+    auto sndr = exec::fork_join(
       exec::just_from(fn),
       then([](auto&&... is) {
         CHECK(sizeof...(is) == 1);
@@ -63,7 +65,8 @@ namespace {
     STATIC_REQUIRE(
       set_equivalent<
         completion_signatures_of_t<decltype(sndr), env<>>,
-        completion_signatures<set_value_t(int, int), set_error_t(std::exception_ptr), set_stopped_t()>>);
+        completion_signatures<set_value_t(int, int), set_error_t(std::exception_ptr), set_stopped_t()>
+      >);
 
     auto [i1, i2] = sync_wait(sndr).value();
     CHECK(i1 == 42);

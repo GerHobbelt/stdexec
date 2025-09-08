@@ -45,9 +45,8 @@ namespace stdexec {
       };
 
     template <class _Sender, class... _Env>
-    concept __has_default_transform_sender = //
-      sender_expr<_Sender>                   //
-      && __has_transform_sender<tag_of_t<_Sender>, _Sender, _Env...>;
+    concept __has_default_transform_sender =
+      sender_expr<_Sender> && __has_transform_sender<tag_of_t<_Sender>, _Sender, _Env...>;
 
     template <class _DomainOrTag, class _Sender, class... _Env>
     using __transform_sender_result_t =
@@ -59,9 +58,8 @@ namespace stdexec {
     };
 
     template <class _Sender, class _Env>
-    concept __has_default_transform_env = //
-      sender_expr<_Sender>                //
-      && __has_transform_env<tag_of_t<_Sender>, _Sender, _Env>;
+    concept __has_default_transform_env = sender_expr<_Sender>
+                                       && __has_transform_env<tag_of_t<_Sender>, _Sender, _Env>;
 
     template <class _DomainOrTag, class _Sender, class _Env>
     using __transform_env_result_t =
@@ -93,10 +91,12 @@ namespace stdexec {
       : __mdefer_<
           __mtransform<
             __mbind_front_q<__completion_domain_for, _Env>,
-            __mremove<__none_such, __munique<__msingle_or<__none_such>>>>,
+            __mremove<__none_such, __munique<__msingle_or<__none_such>>>
+          >,
           set_value_t,
           set_error_t,
-          set_stopped_t> { };
+          set_stopped_t
+        > { };
 
     template <class _Sender>
     using __completion_domain_or_none = __t<__completion_domain_or_none_<env_of_t<_Sender>>>;
@@ -118,13 +118,13 @@ namespace stdexec {
     //! c) `default_domain()`
     struct __get_early_domain_t {
       template <class _Sender, class _Default = default_domain>
-      auto operator()(const _Sender&, _Default __def = {}) const noexcept {
+      auto operator()(const _Sender&, _Default = {}) const noexcept {
         if constexpr (__callable<get_domain_t, env_of_t<_Sender>>) {
           return __domain_of_t<env_of_t<_Sender>>();
         } else if constexpr (__has_completion_domain<_Sender>) {
           return __completion_domain_of<_Sender>();
         } else {
-          return __def;
+          return _Default();
         }
       }
     };
@@ -135,20 +135,17 @@ namespace stdexec {
     ////////////////////////////////////////////////////////////////////////////////////////////////
     //! Function object implementing `get-domain-late(snd)`
     struct __get_late_domain_t {
-      // When connect is looking for a customization, it first checks the sender's domain. If the
-      // sender knows the domain in which it completes, then that is where the subsequent task will
-      // execute. Otherwise, look to the receiver for late-bound information about the current
-      // execution context.
+      // When connect is looking for a customization, it first checks if the sender has a
+      // late domain override. If so, that is the domain that is used to transform the
+      // sender. Otherwise, look to the receiver for information about where the resulting
+      // operation state will be started.
       template <class _Sender, class _Env, class _Default = default_domain>
-      auto operator()(const _Sender& __sndr, const _Env& __env) const noexcept {
-        // The schedule_from algorithm is the exception to the rule. It ignores the domain of the
-        // predecessor, and dispatches based on the domain of the scheduler to which execution is
-        // being transferred.
-        if constexpr (sender_expr_for<_Sender, schedule_from_t>) {
-          return query_or(get_domain, __sexpr_apply(__sndr, __detail::__get_data()), _Default());
-        } else if constexpr (
-          !same_as<dependent_domain, __early_domain_of_t<_Sender, dependent_domain>>) {
-          return __get_early_domain_t{}(__sndr);
+      auto operator()(const _Sender& __sndr, const _Env& __env, _Default = {}) const noexcept {
+        // The schedule_from algorithm is the exception to the rule. It ignores the domain
+        // of the predecessor, and dispatches based on the domain of the scheduler to
+        // which execution is being transferred.
+        if constexpr (__callable<get_domain_late_t, env_of_t<_Sender>>) {
+          return get_domain_late(get_env(__sndr));
         } else if constexpr (__callable<get_domain_t, const _Env&>) {
           return get_domain(__env);
         } else if constexpr (__callable<__composed<get_domain_t, get_scheduler_t>, const _Env&>) {
@@ -159,11 +156,15 @@ namespace stdexec {
       }
     };
 
-    template <class _Sender, class _Env>
-    using __late_domain_of_t = __call_result_t<__get_late_domain_t, _Sender, _Env>;
+    template <class _Sender, class _Env, class _Default = default_domain>
+    using __late_domain_of_t = __call_result_t<__get_late_domain_t, _Sender, _Env, _Default>;
 
     struct __common_domain_fn {
-      template <class _Default = default_domain, class _Dependent = dependent_domain, class... _Domains>
+      template <
+        class _Default = default_domain,
+        class _Dependent = dependent_domain,
+        class... _Domains
+      >
       static auto __common_domain(_Domains...) noexcept {
         if constexpr (sizeof...(_Domains) == 0) {
           return _Default();
@@ -185,14 +186,16 @@ namespace stdexec {
   struct default_domain {
     template <class _Sender, class... _Env>
       requires __detail::__has_default_transform_sender<_Sender, _Env...>
-    STDEXEC_ATTRIBUTE((always_inline)) auto transform_sender(_Sender&& __sndr, _Env&&... __env) const
+    STDEXEC_ATTRIBUTE(always_inline)
+    auto transform_sender(_Sender&& __sndr, _Env&&... __env) const
       noexcept(__detail::__has_nothrow_transform_sender<tag_of_t<_Sender>, _Sender, _Env...>)
         -> __detail::__transform_sender_result_t<tag_of_t<_Sender>, _Sender, _Env...> {
       return tag_of_t<_Sender>().transform_sender(static_cast<_Sender&&>(__sndr), __env...);
     }
 
     template <class _Sender, class... _Env>
-    STDEXEC_ATTRIBUTE((always_inline)) auto transform_sender(_Sender&& __sndr, _Env&&...) const
+    STDEXEC_ATTRIBUTE(always_inline)
+    auto transform_sender(_Sender&& __sndr, _Env&&...) const
       noexcept(__nothrow_constructible_from<_Sender, _Sender>) -> _Sender {
       return static_cast<_Sender>(static_cast<_Sender&&>(__sndr));
     }
@@ -201,8 +204,8 @@ namespace stdexec {
       requires __detail::__has_default_transform_env<_Sender, _Env>
     auto transform_env(_Sender&& __sndr, _Env&& __env) const noexcept
       -> __detail::__transform_env_result_t<tag_of_t<_Sender>, _Sender, _Env> {
-      return tag_of_t<_Sender>().transform_env(
-        static_cast<_Sender&&>(__sndr), static_cast<_Env&&>(__env));
+      return tag_of_t<_Sender>()
+        .transform_env(static_cast<_Sender&&>(__sndr), static_cast<_Env&&>(__env));
     }
 
     template <class _Env>
@@ -212,7 +215,8 @@ namespace stdexec {
 
     template <class _Tag, class... _Args>
       requires __detail::__has_apply_sender<_Tag, _Args...>
-    STDEXEC_ATTRIBUTE((always_inline)) auto apply_sender(_Tag, _Args&&... __args) const //
+    STDEXEC_ATTRIBUTE(always_inline)
+    auto apply_sender(_Tag, _Args&&... __args) const
       -> __detail::__apply_sender_result_t<_Tag, _Args...> {
       return _Tag().apply_sender(static_cast<_Args&&>(__args)...);
     }
@@ -233,7 +237,8 @@ namespace stdexec {
     // defined in __transform_sender.hpp
     template <sender_expr _Sender, class _Env>
       requires same_as<__early_domain_of_t<_Sender>, dependent_domain>
-    STDEXEC_ATTRIBUTE((always_inline)) auto transform_sender(_Sender&& __sndr, const _Env& __env) const
+    STDEXEC_ATTRIBUTE(always_inline)
+    auto transform_sender(_Sender&& __sndr, const _Env& __env) const
       noexcept(__is_nothrow_transform_sender<_Sender, _Env>()) -> decltype(auto);
   };
 

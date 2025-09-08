@@ -45,9 +45,7 @@ namespace nvexec::_strm {
       const inplace_stop_source& stop_source,
       stream_provider_t* stream_provider) noexcept {
       return make_stream_env(
-        __env::__from{[&](get_stop_token_t) noexcept {
-          return stop_source.get_token();
-        }},
+        __env::__from{[&](get_stop_token_t) noexcept { return stop_source.get_token(); }},
         stream_provider);
     }
 
@@ -77,8 +75,8 @@ namespace nvexec::_strm {
             shared_state_->index_ = SharedState::variant_t::template index_of<tuple_t>::value;
             copy_kernel<Tag, As&&...>
               <<<1, 1, 0, stream>>>(shared_state_->data_, static_cast<As&&>(as)...);
-            shared_state_->stream_provider_.status_ =
-              STDEXEC_LOG_CUDA_API(cudaEventRecord(shared_state_->event_, stream));
+            shared_state_->stream_provider_
+              .status_ = STDEXEC_LOG_CUDA_API(cudaEventRecord(shared_state_->event_, stream));
           } else {
             using tuple_t = decayed_tuple<Tag, As...>;
             shared_state_->index_ = SharedState::variant_t::template index_of<tuple_t>::value;
@@ -140,11 +138,11 @@ namespace nvexec::_strm {
       using task_t = continuation_task_t<inner_receiver_t, variant_t>;
       using enqueue_receiver_t =
         stdexec::__t<stream_enqueue_receiver<stdexec::__cvref_id<env_t>, variant_t>>;
-      using intermediate_receiver = //
-        stdexec::__t<std::conditional_t<
-          stream_sender<Sender, env_t>,
-          stdexec::__id<inner_receiver_t>,
-          stdexec::__id<enqueue_receiver_t>>>;
+      using intermediate_receiver = stdexec::__t<std::conditional_t<
+        stream_sender<Sender, env_t>,
+        stdexec::__id<inner_receiver_t>,
+        stdexec::__id<enqueue_receiver_t>
+      >>;
       using inner_op_state_t = connect_result_t<Sender, intermediate_receiver>;
 
       context_state_t context_state_;
@@ -172,8 +170,8 @@ namespace nvexec::_strm {
         , op_state1_{nullptr}
         , op_state2_(connect(static_cast<Sender&&>(sndr), inner_receiver_t{*this})) {
         if (stream_provider_.status_ == cudaSuccess) {
-          stream_provider_.status_ =
-            STDEXEC_LOG_CUDA_API(cudaEventCreateWithFlags(&event_, cudaEventDisableTiming));
+          stream_provider_.status_ = STDEXEC_LOG_CUDA_API(
+            cudaEventCreateWithFlags(&event_, cudaEventDisableTiming));
         }
 
         stdexec::start(op_state2_);
@@ -242,9 +240,9 @@ namespace nvexec::_strm {
           }
         };
 
-        using on_stop = //
-          std::optional<typename stop_token_of_t<env_of_t<Receiver>&>::template callback_type<
-            on_stop_requested>>;
+        using on_stop = std::optional<
+          typename stop_token_of_t<env_of_t<Receiver>&>::template callback_type<on_stop_requested>
+        >;
 
         on_stop on_stop_{};
         __intrusive_ptr<sh_state_t<Sender>> shared_state_;
@@ -252,7 +250,7 @@ namespace nvexec::_strm {
        public:
         using __id = operation_t;
 
-        __t(Receiver rcvr, __intrusive_ptr<sh_state_t<Sender>> shared_state) //
+        __t(Receiver rcvr, __intrusive_ptr<sh_state_t<Sender>> shared_state)
           noexcept(std::is_nothrow_move_constructible_v<Receiver>)
           : operation_base_t{notify}
           , operation_state_base_t<ReceiverId>(
@@ -342,7 +340,7 @@ namespace nvexec::_strm {
       using __id = ensure_started_sender_t;
       using sh_state_ = _ensure_started::sh_state_t<Sender>;
       template <class Receiver>
-      using operation_t = //
+      using operation_t =
         stdexec::__t<_ensure_started::operation_t<SenderId, stdexec::__id<__decay_t<Receiver>>>>;
 
       Sender sndr_;
@@ -350,13 +348,13 @@ namespace nvexec::_strm {
 
       template <receiver Receiver, class Env = env<>>
         requires receiver_of<Receiver, completion_signatures_of_t<__t, Env>>
-      auto connect(Receiver rcvr) && noexcept(__nothrow_move_constructible<Receiver>) //
+      auto connect(Receiver rcvr) && noexcept(__nothrow_move_constructible<Receiver>)
         -> operation_t<Receiver> {
         return operation_t<Receiver>{static_cast<Receiver&&>(rcvr), std::move(shared_state_)};
       }
 
-      auto get_env() const noexcept -> env_of_t<const Sender&> {
-        return stdexec::get_env(sndr_);
+      auto get_env() const noexcept -> stream_sender_attrs<Sender> {
+        return {&sndr_};
       }
 
       template <class... Tys>
@@ -371,7 +369,8 @@ namespace nvexec::_strm {
         _ensure_started::env_t,
         completion_signatures<set_error_t(cudaError_t), set_stopped_t()>,
         __q<_set_value_t>,
-        __q<_set_error_t>> {
+        __q<_set_error_t>
+      > {
         return {};
       }
 
@@ -398,7 +397,7 @@ namespace nvexec::_strm {
     using _sender_t = __t<ensure_started_sender_t<__id<__decay_t<Sender>>>>;
 
     template <class Env, stream_completing_sender Sender>
-    auto operator()(__ignore, Env&& /*env*/, Sender&& sndr) const -> _sender_t<Sender> {
+    auto operator()(__ignore, Env&&, Sender&& sndr) const -> _sender_t<Sender> {
       auto sched = get_completion_scheduler<set_value_t>(get_env(sndr));
       return _sender_t<Sender>{sched.context_state_, static_cast<Sender&&>(sndr)};
     }

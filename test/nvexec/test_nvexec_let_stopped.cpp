@@ -25,8 +25,8 @@ namespace {
     flags_storage_t flags_storage{};
     auto flags = flags_storage.get();
 
-    auto snd = ex::just_stopped() //
-             | ex::continues_on(stream_ctx.get_scheduler()) | ex::let_stopped([=] {
+    auto snd = ex::just_stopped() | ex::continues_on(stream_ctx.get_scheduler())
+             | ex::let_stopped([=] {
                  if (is_on_gpu()) {
                    flags.set();
                  }
@@ -39,14 +39,14 @@ namespace {
   }
 
   TEST_CASE(
-    "let_stopped can preceed a sender without values",
+    "nvexec let_stopped can preceed a sender without values",
     "[cuda][stream][adaptors][let_stopped]") {
     nvexec::stream_context stream_ctx{};
 
     flags_storage_t<2> flags_storage{};
     auto flags = flags_storage.get();
 
-    auto snd = ex::just_stopped() | ex::continues_on(stream_ctx.get_scheduler()) //
+    auto snd = ex::just_stopped() | ex::continues_on(stream_ctx.get_scheduler())
              | ex::let_stopped([flags] {
                  if (is_on_gpu()) {
                    flags.set(0);
@@ -70,9 +70,7 @@ namespace {
     flags_storage_t flags_storage{};
     auto flags = flags_storage.get();
 
-    auto snd = ex::just_stopped()         //
-             | ex::continues_on(sch)      //
-             | a_sender([]() noexcept {}) //
+    auto snd = ex::just_stopped() | ex::continues_on(sch) | a_sender([]() noexcept {})
              | ex::let_stopped([=] {
                  if (is_on_gpu()) {
                    flags.set();

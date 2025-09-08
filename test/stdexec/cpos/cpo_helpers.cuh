@@ -35,10 +35,11 @@ namespace {
     using sender_concept = stdexec::sender_t;
     static constexpr scope_t scope = Scope;
 
-    using completion_signatures = ex::completion_signatures< //
-      ex::set_value_t(),                                     //
-      ex::set_error_t(std::exception_ptr),                   //
-      ex::set_stopped_t()>;
+    using completion_signatures = ex::completion_signatures<
+      ex::set_value_t(),
+      ex::set_error_t(std::exception_ptr),
+      ex::set_stopped_t()
+    >;
   };
 
   struct cpo_sender_domain {
@@ -48,18 +49,31 @@ namespace {
     }
   };
 
+  struct cpo_sender_attrs_t {
+    [[nodiscard]]
+    auto query(ex::get_domain_t) const noexcept {
+      return cpo_sender_domain{};
+    }
+
+    [[nodiscard]]
+    auto query(ex::get_domain_late_t) const noexcept {
+      return cpo_sender_domain{};
+    }
+  };
+
   template <class CPO>
   struct cpo_test_sender_t {
     using sender_concept = stdexec::sender_t;
     using __id = cpo_test_sender_t;
     using __t = cpo_test_sender_t;
-    using completion_signatures = ex::completion_signatures< //
-      ex::set_value_t(),                                     //
-      ex::set_error_t(std::exception_ptr),                   //
-      ex::set_stopped_t()>;
+    using completion_signatures = ex::completion_signatures<
+      ex::set_value_t(),
+      ex::set_error_t(std::exception_ptr),
+      ex::set_stopped_t()
+    >;
 
     auto get_env() const noexcept {
-      return ex::prop{ex::get_domain, cpo_sender_domain{}};
+      return cpo_sender_attrs_t{};
     }
   };
 
@@ -86,10 +100,11 @@ namespace {
       using sender_concept = stdexec::sender_t;
       using __id = sender_t;
       using __t = sender_t;
-      using completion_signatures = ex::completion_signatures< //
-        ex::set_value_t(),                                     //
-        ex::set_error_t(std::exception_ptr),                   //
-        ex::set_stopped_t()>;
+      using completion_signatures = ex::completion_signatures<
+        ex::set_value_t(),
+        ex::set_error_t(std::exception_ptr),
+        ex::set_stopped_t()
+      >;
 
       auto get_env() const noexcept -> env_t {
         return {};

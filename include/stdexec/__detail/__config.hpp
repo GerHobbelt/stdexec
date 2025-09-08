@@ -106,7 +106,7 @@
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || STDEXEC_NVHPC()
 #  define STDEXEC_CUDA(...) STDEXEC_HEAD_OR_TAIL(1, __VA_ARGS__)
 #else
 #  define STDEXEC_CUDA(...) STDEXEC_HEAD_OR_NULL(0, __VA_ARGS__)
@@ -143,9 +143,9 @@ namespace __coro = std::experimental;
 // For portably declaring attributes on functions and types
 //   Usage:
 //
-//   STDEXEC_ATTRIBUTE((attr1, attr2, ...))
+//   STDEXEC_ATTRIBUTE(attr1, attr2, ...)
 //   void foo() { ... }
-#define STDEXEC_ATTRIBUTE(_XP) STDEXEC_FOR_EACH(STDEXEC__ATTRIBUTE_DETAIL, STDEXEC_EXPAND _XP)
+#define STDEXEC_ATTRIBUTE(...) STDEXEC_FOR_EACH(STDEXEC__ATTRIBUTE_DETAIL, __VA_ARGS__)
 #define STDEXEC__ATTRIBUTE_DETAIL(_ATTR)                                                           \
   STDEXEC_CAT(STDEXEC_ATTR_WHICH_, STDEXEC_CHECK(STDEXEC_CAT(STDEXEC_ATTR_, _ATTR)))(_ATTR)
 
@@ -382,7 +382,7 @@ namespace stdexec {
 #if STDEXEC_GCC()
 #  define STDEXEC_IMMOVABLE_NO_UNIQUE_ADDRESS
 #else
-#  define STDEXEC_IMMOVABLE_NO_UNIQUE_ADDRESS STDEXEC_ATTRIBUTE((no_unique_address))
+#  define STDEXEC_IMMOVABLE_NO_UNIQUE_ADDRESS STDEXEC_ATTRIBUTE(no_unique_address)
 #endif
 
 #if STDEXEC_NVHPC()
@@ -481,6 +481,78 @@ namespace stdexec {
 #  undef STDEXEC_ENABLE_EXTRA_TYPE_CHECKING
 #  define STDEXEC_ENABLE_EXTRA_TYPE_CHECKING() 1
 #endif
+
+#if STDEXEC_MSVC()
+#  define STDEXEC_NO_EXCEPTIONS() (_HAS_EXCEPTIONS == 0) || (_CPPUNWIND == 0)
+#else
+#  define STDEXEC_NO_EXCEPTIONS() (__EXCEPTIONS == 0)
+#endif
+
+// We need to treat host and device separately
+#if STDEXEC_CUDA() && defined(__CUDA_ARCH__) && !STDEXEC_NVHPC()
+#  define STDEXEC_GLOBAL_CONSTANT STDEXEC_ATTRIBUTE(device) constexpr
+#else
+#  define STDEXEC_GLOBAL_CONSTANT inline constexpr
+#endif
+
+#if defined(__CUDACC__) || STDEXEC_NVHPC()
+#  define STDEXEC_CUDA_COMPILATION() 1
+#else
+#  define STDEXEC_CUDA_COMPILATION() 0
+#endif
+
+#if STDEXEC_CUDA_COMPILATION() || __has_include(<cuda_runtime_api.h>)
+#  define STDEXEC_HAS_CTK() 1
+#else
+#  define STDEXEC_HAS_CTK() 0
+#endif
+
+// clang-format off
+#if STDEXEC_HAS_CTK() && __has_include(<nv/target>)
+#  include <nv/target>
+#  define STDEXEC_IF_HOST(...)     NV_IF_TARGET(NV_IS_HOST, (__VA_ARGS__;))
+#  define STDEXEC_IF_DEVICE(...)   NV_IF_TARGET(NV_IS_DEVICE, (__VA_ARGS__;))
+#else
+#  define STDEXEC_IF_HOST(...)     {__VA_ARGS__;}
+#  define STDEXEC_IF_DEVICE(...)
+#endif
+// clang-format on
+
+// CUDA compilers preinclude cuda_runtime.h, so we need to include it here to get the CUDART_VERSION macro
+#if STDEXEC_HAS_CTK() && !STDEXEC_CUDA_COMPILATION()
+#  include <cuda_runtime_api.h>
+#endif
+
+// The following macros are used to conditionally compile exception handling code. They
+// are used in the same way as `try` and `catch` blocks, but they allow for different
+// behavior based on whether exceptions are enabled or not, and whether the code is being
+// compiled for device or not.
+//
+// Usage:
+//   STDEXEC_TRY({
+//     ...                               // Code that may throw an exception
+//   })
+//   STDEXEC_CATCH_OR((cuda_error& e) {  // Handle CUDA exceptions
+//     ...
+//   })
+//   STDEXEC_CATCH((...) {               // Handle any other exceptions
+//     ...
+//   })
+// clang-format off
+#if STDEXEC_NO_EXCEPTIONS() || (STDEXEC_CUDA_COMPILATION() && defined(__CUDA_ARCH__))
+#  define STDEXEC_TRY(...) { __VA_ARGS__ }
+#  define STDEXEC_CATCH(...)
+#  define STDEXEC_CATCH_OR(...)
+#elif STDEXEC_CUDA_COMPILATION() && STDEXEC_NVHPC()
+#  define STDEXEC_TRY(...) if target (nv::target::is_device) { __VA_ARGS__ } else { try { __VA_ARGS__ }
+#  define STDEXEC_CATCH(...) catch __VA_ARGS__ }
+#  define STDEXEC_CATCH_OR(...) catch __VA_ARGS__
+#else
+#  define STDEXEC_TRY(...) try { __VA_ARGS__ }
+#  define STDEXEC_CATCH(...) catch __VA_ARGS__
+#  define STDEXEC_CATCH_OR(...) catch __VA_ARGS__
+#endif
+// clang-format on
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // clang-tidy struggles with the CUDA function annotations

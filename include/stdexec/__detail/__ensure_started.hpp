@@ -43,7 +43,8 @@ namespace stdexec {
         if constexpr (sender_expr_for<_Sender, __ensure_started_t>) {
           return static_cast<_Sender&&>(__sndr);
         } else {
-          auto __domain = __get_late_domain(__sndr, __env);
+          auto __early_domain = __get_early_domain(__sndr);
+          auto __domain = __get_late_domain(__sndr, __env, __early_domain);
           return stdexec::transform_sender(
             __domain,
             __make_sexpr<ensure_started_t>(
@@ -51,7 +52,9 @@ namespace stdexec {
         }
       }
 
-      STDEXEC_ATTRIBUTE((always_inline)) auto operator()() const noexcept -> __binder_back<ensure_started_t> {
+      STDEXEC_ATTRIBUTE(always_inline)
+
+      auto operator()() const noexcept -> __binder_back<ensure_started_t> {
         return {{}, {}, {}};
       }
 
@@ -88,10 +91,8 @@ namespace stdexec {
 
   template <>
   struct __sexpr_impl<ensure_started_t> : __sexpr_defaults {
-    static constexpr auto get_completion_signatures = //
-      []<class _Sender>(_Sender&&) noexcept           //
-      -> __completion_signatures_of_t<                //
-        transform_sender_result_t<default_domain, _Sender, env<>>> {
+    static constexpr auto get_completion_signatures = []<class _Sender>(_Sender&&) noexcept
+      -> __completion_signatures_of_t<transform_sender_result_t<default_domain, _Sender, env<>>> {
     };
   };
 } // namespace stdexec
