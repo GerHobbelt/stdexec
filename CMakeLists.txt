@@ -312,10 +312,25 @@ if(STDEXEC_ENABLE_CUDA)
     target_compile_features(nvexec INTERFACE cuda_std_20)
     target_link_libraries(nvexec INTERFACE STDEXEC::stdexec)
 
+    set(_gpus)
+    foreach(_arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
+      if(_arch MATCHES "-real")
+        string(REPLACE "-real" "" _arch "${_arch}")
+        string(PREPEND _arch "cc")
+      elseif(_arch MATCHES "-virtual")
+        string(REPLACE "-virtual" "" _arch "${_arch}")
+        string(PREPEND _arch "cc")
+      elseif(_arch MATCHES "^[0-9]+$")
+        string(PREPEND _arch "cc")
+      endif()
+      list(APPEND _gpus "${_arch}")
+    endforeach()
+    list(JOIN _gpus "," _gpus)
+
     target_compile_options(nvexec INTERFACE
-      $<$<AND:$<CXX_COMPILER_ID:NVHPC>,$<COMPILE_LANGUAGE:CXX>>:-stdpar -gpu=cc${CMAKE_CUDA_ARCHITECTURES}>)
+      $<$<AND:$<CXX_COMPILER_ID:NVHPC>,$<COMPILE_LANGUAGE:CXX>>:-stdpar -gpu=${_gpus}>)
     target_link_options(nvexec INTERFACE
-      $<$<AND:$<CXX_COMPILER_ID:NVHPC>,$<COMPILE_LANGUAGE:CXX>>:-stdpar -gpu=cc${CMAKE_CUDA_ARCHITECTURES}>)
+      $<$<AND:$<CXX_COMPILER_ID:NVHPC>,$<COMPILE_LANGUAGE:CXX>>:-stdpar -gpu=${_gpus}>)
 
     install(TARGETS nvexec
         EXPORT stdexec-exports
@@ -364,6 +379,7 @@ if (STDEXEC_ENABLE_TBB)
     include(rapids-find)
     rapids_find_package(
         TBB REQUIRED
+        COMPONENTS tbb
         BUILD_EXPORT_SET stdexec-exports
         INSTALL_EXPORT_SET stdexec-exports
     )
@@ -382,10 +398,13 @@ if (STDEXEC_ENABLE_TBB)
       FILES ${tbbpool_headers}
     )
 
+    target_link_libraries(stdexec INTERFACE
+        TBB::tbb
+        )
+
     target_link_libraries(tbbpool
         INTERFACE
         STDEXEC::stdexec
-        TBB::tbb
         )
 
     install(TARGETS tbbpool
@@ -501,8 +520,14 @@ endif()
 include(CheckIncludeFileCXX)
 if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   CHECK_INCLUDE_FILE_CXX("dispatch/dispatch.h" STDEXEC_FOUND_LIBDISPATCH)
-  option(STDEXEC_ENABLE_LIBDISPATCH "Enable the tests for the Grand Central Dispatch scheduler" ${STDEXEC_FOUND_LIBDISPATCH})
+  option(STDEXEC_ENABLE_LIBDISPATCH "Enable use of the Grand Central Dispatch scheduler" ${STDEXEC_FOUND_LIBDISPATCH})
   target_compile_definitions(stdexec INTERFACE STDEXEC_ENABLE_LIBDISPATCH)
+endif()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  CHECK_INCLUDE_FILE_CXX("windows.h" STDEXEC_FOUND_WINDOWS_HEADER)
+  option(STDEXEC_ENABLE_WINDOWS_THREAD_POOL "Enable use of the Windows Thread Pool scheduler" ${STDEXEC_FOUND_WINDOWS_HEADER})
+  target_compile_definitions(stdexec INTERFACE STDEXEC_ENABLE_WINDOWS_THREAD_POOL)
 endif()
 
 option (STDEXEC_ENABLE_NUMA "Enable NUMA affinity for static_thread_pool" OFF)
@@ -548,7 +573,7 @@ else()
     "
     STDEXEC_FOUND_IO_URING)
 endif()
-option(STDEXEC_ENABLE_IO_URING_TESTS "Enable io_uring tests" ${STDEXEC_FOUND_IO_URING})
+option(STDEXEC_ENABLE_IO_URING "Enable the use of the io_uring scheduler on Linux" ${STDEXEC_FOUND_IO_URING})
 
 option(STDEXEC_BUILD_DOCS "Build stdexec documentation" OFF)
 option(STDEXEC_BUILD_EXAMPLES "Build stdexec examples" ON)

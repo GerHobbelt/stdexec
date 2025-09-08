@@ -18,9 +18,14 @@
 #include "__system_context_replaceability_api.hpp"
 
 #include "../../stdexec/execution.hpp"
-#include "../static_thread_pool.hpp"
 #if STDEXEC_ENABLE_LIBDISPATCH
 #  include "../libdispatch_queue.hpp" // IWYU pragma: keep
+#elif STDEXEC_ENABLE_IO_URING
+#  include "../linux/io_uring_context.hpp" // IWYU pragma: keep
+#elif STDEXEC_ENABLE_WINDOWS_THREAD_POOL
+#  include "../windows/windows_thread_pool.hpp" // IWYU pragma: keep
+#else
+#  include "../static_thread_pool.hpp" // IWYU pragma: keep
 #endif
 
 #include <thread>
@@ -199,7 +204,7 @@ namespace exec::__system_context_default_impl {
       }
 
       uint32_t __end(uint32_t __chunk_index) const noexcept {
-        return std::min(__begin(__chunk_index + 1), __max_size_);
+        return (std::min)(__begin(__chunk_index + 1), __max_size_);
       }
     };
 
@@ -302,6 +307,10 @@ namespace exec::__system_context_default_impl {
   /// Keeps track of the backends for the system context interfaces.
   template <typename _Interface, typename _Impl>
   struct __instance_data {
+    // work around for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=119652
+    constexpr __instance_data() noexcept // NOLINT(modernize-use-equals-default)
+    {}
+
     /// Gets the current instance; if there is no instance, uses the current factory to create one.
     auto __get_current_instance() -> std::shared_ptr<_Interface> {
       // If we have a valid instance, return it.
@@ -362,6 +371,10 @@ namespace exec::__system_context_default_impl {
 
 #if STDEXEC_ENABLE_LIBDISPATCH
   using __parallel_scheduler_backend_impl = __generic_impl<exec::libdispatch_queue>;
+#elif STDEXEC_ENABLE_IO_URING
+  using __parallel_scheduler_backend_impl = __generic_impl<exec::io_uring_context>;
+#elif STDEXEC_ENABLE_WINDOWS_THREAD_POOL
+  using __parallel_scheduler_backend_impl = __generic_impl<exec::windows_thread_pool>;
 #else
   using __parallel_scheduler_backend_impl = __generic_impl<exec::static_thread_pool>;
 #endif
