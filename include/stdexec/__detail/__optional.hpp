@@ -107,7 +107,8 @@ namespace stdexec {
 
       template <class _Fn, class... _Args>
         requires same_as<_Tp, __call_result_t<_Fn>>
-      auto __emplace_from(_Fn&& __f, _Args&&... __args) noexcept(__nothrow_callable<_Fn, _Args...>) -> _Tp& {
+      auto __emplace_from(_Fn&& __f, _Args&&... __args) noexcept(__nothrow_callable<_Fn, _Args...>)
+        -> _Tp& {
         reset();
         auto __sg = __mk_has_value_guard(__has_value_);
         auto* __p = ::new (static_cast<void*>(std::addressof(__value_)))
@@ -118,21 +119,21 @@ namespace stdexec {
 
       auto value() & -> _Tp& {
         if (!__has_value_) {
-          throw __bad_optional_access();
+          STDEXEC_THROW(__bad_optional_access());
         }
         return __value_;
       }
 
       auto value() const & -> const _Tp& {
         if (!__has_value_) {
-          throw __bad_optional_access();
+          STDEXEC_THROW(__bad_optional_access());
         }
         return __value_;
       }
 
       auto value() && -> _Tp&& {
         if (!__has_value_) {
-          throw __bad_optional_access();
+          STDEXEC_THROW(__bad_optional_access());
         }
         return static_cast<_Tp&&>(__value_);
       }

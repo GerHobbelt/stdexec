@@ -17,13 +17,9 @@
 
 #include <catch2/catch.hpp>
 
-#include <span>
-
 #include <stdexec/execution.hpp>
 
 #include <test_common/schedulers.hpp>
-#include <exec/on.hpp>
-#include <exec/env.hpp>
 #include <exec/inline_scheduler.hpp>
 
 #include <execpools/taskflow/taskflow_thread_pool.hpp>
@@ -34,7 +30,7 @@ namespace {
 
   template <ex::scheduler Sched = inline_scheduler>
   inline auto _with_scheduler(Sched sched = {}) {
-    return exec::write_env(stdexec::prop{ex::get_scheduler, std::move(sched)});
+    return ex::write_env(ex::prop{ex::get_scheduler, std::move(sched)});
   }
 
   namespace {
@@ -82,7 +78,7 @@ namespace {
   } // namespace
 
   TEST_CASE(
-    "exec::on works when changing threads with execpools::taskflow_thread_pool",
+    "stdexec::on works when changing threads with execpools::taskflow_thread_pool",
     "[adaptors][exec::starts_on]") {
     execpools::taskflow_thread_pool pool;
     auto pool_sched = pool.get_scheduler();

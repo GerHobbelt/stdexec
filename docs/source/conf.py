@@ -22,6 +22,8 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+
 project = 'stdexec'
 copyright = '2025, NVIDIA Corporation'
 author = 'NVIDIA Corporation'
@@ -34,6 +36,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.graphviz",
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx_copybutton",
@@ -75,5 +78,6 @@ breathe_default_project = "stdexec"
 
 highlight_language = "cpp"
 
-# def setup(app):
-#     app.add_css_file("params.css")
+html_css_files = [
+    'style.css',
+]

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (c) 2023 NVIDIA Corporation
+ * Copyright (c) 2025 NVIDIA Corporation
  *
  * Licensed under the Apache License Version 2.0 with LLVM Exceptions
  * (the "License"); you may not use this file except in compliance with
@@ -14,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-#include <stdexec/execution.hpp>
-#include <exec/repeat_n.hpp>
+#include "__execution_fwd.hpp"
 
-namespace ex = stdexec;
+// include these after __execution_fwd.hpp
+#include "__env.hpp"
+#include "__write_env.hpp"
+#include "../stop_token.hpp"
 
-auto main() -> int {
-  ex::sender auto snd = ex::just(42) | exec::repeat_n(10);
-  // build error: _REPEAT_N_EXPECTS_A_SENDER_OF_VOID_
-  stdexec::sync_wait(std::move(snd));
-}
+namespace stdexec {
+  inline constexpr auto unstoppable = write_env(prop{get_stop_token, never_stop_token{}});
+} // namespace stdexec

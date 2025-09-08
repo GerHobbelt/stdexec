@@ -40,7 +40,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <type_traits> // IWYU pragma: keep
-#include <utility> // IWYU pragma: keep for std::unreachable
+#include <utility>     // IWYU pragma: keep for std::unreachable
 
 // When used with no arguments, these macros expand to 1 if the current
 // compiler corresponds to the macro name; 0, otherwise. When used with arguments,
@@ -426,7 +426,7 @@ namespace stdexec {
 #  define STDEXEC_HAS_EXECUTION_POLICY() 0
 #endif
 
-#if defined(__cpp_lib_execution) && __cpp_lib_execution >= 	201902L
+#if defined(__cpp_lib_execution) && __cpp_lib_execution >= 201902L
 #  define STDEXEC_HAS_UNSEQUENCED_EXECUTION_POLICY() 1
 #else
 #  define STDEXEC_HAS_UNSEQUENCED_EXECUTION_POLICY() 0
