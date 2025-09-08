@@ -134,6 +134,18 @@ namespace exec {
         noexcept(stdexec::__nothrow_decay_copyable<Rcvr, Fn const &>) -> _opstate<Rcvr, Fn> {
         return _opstate<Rcvr, Fn>{static_cast<Rcvr&&>(rcvr), _fn};
       }
+
+      template <class Rcvr>
+      STDEXEC_ATTRIBUTE((host, device)) auto submit(Rcvr rcvr) && noexcept -> void {
+        auto op = static_cast<_sndr_base&&>(*this).connect(static_cast<Rcvr&&>(rcvr));
+        stdexec::start(op);
+      }
+
+      template <class Rcvr>
+      STDEXEC_ATTRIBUTE((host, device)) auto submit(Rcvr rcvr) const & noexcept -> void {
+        auto op = this->connect(static_cast<Rcvr&&>(rcvr));
+        stdexec::start(op);
+      }
     };
 
     template <class Fn, class Tag = JustTag>
@@ -167,12 +179,6 @@ namespace exec {
   //!
   //! @param fn The callable to be invoked when the sender is started.
   //!
-  //! @par Example:
-  //! @code
-  //! // The following sender is equivalent to just(42, 3.14):
-  //! auto sndr = exec::just_from([](auto sink) { return sink(42, 3.14); });
-  //! @endcode
-  //!
   //! @par
   //! The function passed to `just_from` must return an instance of a specialization of
   //! `stdexec::completion_signatures<>` that describes the ways the sink function might be
@@ -182,6 +188,13 @@ namespace exec {
   //!
   //! @par Example:
   //! @code
+  //! // The following sender is equivalent to just(42, 3.14):
+  //! auto sndr = exec::just_from([](auto sink) { return sink(42, 3.14); });
+  //! @endcode
+  //!
+  //! @par Example:
+  //! @code
+  //! // A just_from sender can have multiple completion signatures:
   //! auto sndr = exec::just_from(
   //!   [](auto sink) {
   //!     if (some-condition) {
