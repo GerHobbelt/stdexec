@@ -78,7 +78,7 @@ namespace exec {
       using __child_t = __decay_t<__data_of<_Sender>>;
       using __receiver_t = stdexec::__t<__receiver<__id<_Sender>, __id<_Receiver>>>;
       using __child_on_sched_sender_t =
-        __result_of<exec::sequence, schedule_result_t<trampoline_scheduler&>, __child_t &>;
+        __result_of<exec::sequence, schedule_result_t<trampoline_scheduler &>, __child_t &>;
       using __child_op_t = stdexec::connect_result_t<__child_on_sched_sender_t, __receiver_t>;
 
       __child_t __child_;
@@ -97,7 +97,7 @@ namespace exec {
           std::atomic_thread_fence(std::memory_order_release);
           // TSan does not support std::atomic_thread_fence, so we
           // need to use the TSan-specific __tsan_release instead:
-          STDEXEC_TSAN(__tsan_release(&__started_));
+          STDEXEC_WHEN(STDEXEC_TSAN(), __tsan_release(&__started_));
           __child_op_.__destroy();
         }
       }
@@ -203,7 +203,6 @@ namespace exec {
       }
 
       STDEXEC_ATTRIBUTE(always_inline)
-
       constexpr auto operator()() const -> __binder_back<repeat_effect_until_t> {
         return {{}, {}, {}};
       }
@@ -234,7 +233,6 @@ namespace exec {
       }
 
       STDEXEC_ATTRIBUTE(always_inline)
-
       constexpr auto operator()() const -> __binder_back<repeat_effect_t> {
         return {{}, {}, {}};
       }

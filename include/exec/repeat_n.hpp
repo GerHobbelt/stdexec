@@ -48,12 +48,26 @@ namespace exec {
 
         template <class... _Args>
         void set_value(_Args &&...__args) noexcept {
-          __state_->__complete(set_value_t(), static_cast<_Args &&>(__args)...);
+          STDEXEC_TRY {
+            __state_->__complete(set_value_t(), static_cast<_Args &&>(__args)...);
+          }
+          STDEXEC_CATCH_ALL {
+            if constexpr (!__nothrow_decay_copyable<_Args...>) {
+              __state_->__complete(set_error_t(), std::current_exception());
+            }
+          }
         }
 
         template <class _Error>
         void set_error(_Error &&__err) noexcept {
-          __state_->__complete(set_error_t(), static_cast<_Error &&>(__err));
+          STDEXEC_TRY {
+            __state_->__complete(set_error_t(), static_cast<_Error &&>(__err));
+          }
+          STDEXEC_CATCH_ALL {
+            if constexpr (!__nothrow_decay_copyable<_Error>) {
+              __state_->__complete(set_error_t(), std::current_exception());
+            }
+          }
         }
 
         void set_stopped() noexcept {
@@ -90,7 +104,7 @@ namespace exec {
       using __child_t = decltype(__child_count_pair_t::__child_);
       using __receiver_t = stdexec::__t<__receiver<__id<_Sender>, __id<_Receiver>>>;
       using __child_on_sched_sender_t =
-        __result_of<exec::sequence, schedule_result_t<trampoline_scheduler&>, __child_t &>;
+        __result_of<exec::sequence, schedule_result_t<trampoline_scheduler &>, __child_t &>;
       using __child_op_t = stdexec::connect_result_t<__child_on_sched_sender_t, __receiver_t>;
 
       __child_count_pair<__child_t> __pair_;
@@ -109,7 +123,7 @@ namespace exec {
           std::atomic_thread_fence(std::memory_order_release);
           // TSan does not support std::atomic_thread_fence, so we
           // need to use the TSan-specific __tsan_release instead:
-          STDEXEC_TSAN(__tsan_release(&__started_));
+          STDEXEC_WHEN(STDEXEC_TSAN(), __tsan_release(&__started_));
           __child_op_.__destroy();
         }
       }
@@ -216,7 +230,6 @@ namespace exec {
       }
 
       STDEXEC_ATTRIBUTE(always_inline)
-
       constexpr auto
         operator()(std::size_t __count) const -> __binder_back<repeat_n_t, std::size_t> {
         return {{__count}, {}, {}};

@@ -20,7 +20,7 @@
 
 #if __has_include(<bit>)
 #  include <bit>
-#  if __cpp_lib_bit_cast >= 201806L
+#  if __cpp_lib_bit_cast >= 2018'06L
 #    define STDEXEC_HAS_BIT_CAST
 #  endif
 #endif
@@ -39,7 +39,7 @@ namespace exec {
     requires(sizeof(_To) == sizeof(_From))
   [[nodiscard]]
   constexpr _To bit_cast(const _From& __from) noexcept {
-#  if STDEXEC_HAS_BUILTIN(__builtin_bit_cast) || (_MSC_VER >= 1926)
+#  if STDEXEC_HAS_BUILTIN(__builtin_bit_cast) || (STDEXEC_MSVC() && STDEXEC_MSVC_VERSION >= 19'26)
     return __builtin_bit_cast(_To, __from);
 #  else
     _To __to;
