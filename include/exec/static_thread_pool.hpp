@@ -697,7 +697,7 @@ namespace exec {
       threads_.reserve(threadCount);
 
       try {
-        numActive_.store(threadCount << 16, std::memory_order_relaxed);
+        numActive_.store(threadCount << 16u, std::memory_order_relaxed);
         for (std::uint32_t i = 0; i < threadCount; ++i) {
           threads_.emplace_back([this, i] { run(i); });
         }
@@ -720,8 +720,8 @@ namespace exec {
     }
 
     inline void static_thread_pool_::run(std::uint32_t threadIndex) noexcept {
-      // NOLINTNEXTLINE(bugprone-unused-return-value)
       STDEXEC_ASSERT(threadIndex < threadCount_);
+      // NOLINTNEXTLINE(bugprone-unused-return-value)
       numa_.bind_to_node(threadStates_[threadIndex]->numa_node());
       while (true) {
         // Make a blocking call to de-queue a task if we don't already have one.
@@ -942,28 +942,29 @@ namespace exec {
     }
 
     inline void static_thread_pool_::thread_state::set_sleeping() {
-      pool_->numActive_.fetch_sub(1 << 16, std::memory_order_relaxed);
+      pool_->numActive_.fetch_sub(1u << 16u, std::memory_order_relaxed);
     }
 
     // wakeup a worker thread and maintain the invariant that we always one active thief as long as a potential victim is awake
     inline void static_thread_pool_::thread_state::clear_sleeping() {
-      const std::uint32_t numActive = pool_->numActive_.fetch_add(1 << 16, std::memory_order_relaxed);
+      const std::uint32_t numActive =
+        pool_->numActive_.fetch_add(1u << 16u, std::memory_order_relaxed);
       if (numActive == 0) {
         notify_one_sleeping();
       }
     }
 
     inline void static_thread_pool_::thread_state::set_stealing() {
-      const std::uint32_t diff = 1 - (1 << 16);
+      const std::uint32_t diff = 1u - (1u << 16u);
       pool_->numActive_.fetch_add(diff, std::memory_order_relaxed);
     }
 
     // put a thief to sleep but maintain the invariant that we always have one active thief as long as a potential victim is awake
     inline void static_thread_pool_::thread_state::clear_stealing() {
-      constexpr std::uint32_t diff = 1 - (1 << 16);
+      constexpr std::uint32_t diff = 1 - (1u << 16u);
       const std::uint32_t numActive = pool_->numActive_.fetch_sub(diff, std::memory_order_relaxed);
-      const std::uint32_t numVictims = numActive >> 16;
-      const std::uint32_t numThiefs = numActive & 0xffff;
+      const std::uint32_t numVictims = numActive >> 16u;
+      const std::uint32_t numThiefs = numActive & 0xffffu;
       if (numThiefs == 1 && numVictims != 0) {
         notify_one_sleeping();
       }
@@ -1018,9 +1019,12 @@ namespace exec {
           }
           set_sleeping();
           cv_.wait(lock);
+          lock.unlock();
           clear_sleeping();
         }
-        lock.unlock();
+        if (lock.owns_lock()) {
+          lock.unlock();
+        }
         state_.store(state::running, std::memory_order_relaxed);
         result = try_pop();
       }

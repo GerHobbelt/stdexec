@@ -30,6 +30,7 @@
 #include "__transform_completion_signatures.hpp"
 #include "__transform_sender.hpp"
 #include "__type_traits.hpp"
+#include <type_traits>
 
 namespace stdexec {
   /////////////////////////////////////////////////////////////////////////////
@@ -70,7 +71,7 @@ namespace stdexec {
 
     template <class _Sender, class... _Env>
     concept __with_legacy_tag_invoke = //
-      (sizeof...(_Env) == 0) && tag_invocable<get_completion_signatures_t, _Sender, empty_env>;
+      (sizeof...(_Env) == 0) && tag_invocable<get_completion_signatures_t, _Sender, env<>>;
 
     template <class _Sender>
     using __member_alias_t = //
@@ -104,7 +105,7 @@ namespace stdexec {
           return static_cast<_Result (*)()>(nullptr);
         } else if constexpr (__with_legacy_tag_invoke<_TfxSender, _Env...>) {
           // This branch is strictly for backwards compatibility
-          using _Result = tag_invoke_result_t<get_completion_signatures_t, _Sender, empty_env>;
+          using _Result = tag_invoke_result_t<get_completion_signatures_t, _Sender, env<>>;
           return static_cast<_Result (*)()>(nullptr);
           // [WAR] The explicit cast to bool below is to work around a bug in nvc++ (nvbug#4707793)
         } else if constexpr (bool(__awaitable<_TfxSender, __env::__promise<_Env>...>)) {
@@ -304,7 +305,7 @@ namespace stdexec {
   template <class _Sig>
   using __tag_of_sig_t = decltype(stdexec::__tag_of_sig_(static_cast<_Sig*>(nullptr)));
 
-  template <class _Sender, class _SetSig, class _Env = empty_env>
+  template <class _Sender, class _SetSig, class _Env = env<>>
   concept sender_of =        //
     sender_in<_Sender, _Env> //
     && same_as<
@@ -320,7 +321,7 @@ namespace stdexec {
     requires false
   using __nofail_t = _Error;
 
-  template <class _Sender, class _Env = empty_env>
+  template <class _Sender, class _Env = env<>>
   concept __nofail_sender = sender_in<_Sender, _Env> && requires {
     typename __gather_completion_signatures<
       __completion_signatures_of_t<_Sender, _Env>,
@@ -335,4 +336,54 @@ namespace stdexec {
   template <class _Sender>
   concept __well_formed_sender = __detail::__well_formed_sender<
     __minvoke<__with_default_q<__completion_signatures_of_t, dependent_completions>, _Sender>>;
+
+  // Used to report a meaningful error message when the sender_in<Sndr, Env> concept check fails.
+  template <class _Sender, class... _Env>
+  auto __diagnose_sender_concept_failure() {
+    if constexpr (!enable_sender<_Sender>) {
+      static_assert(
+        enable_sender<_Sender>,
+        "The given type is not a sender because stdexec::enable_sender<Sender> is false. Either "
+        "give the type a nested ::sender_concept typedef that is an alias for stdexec::sender_t, "
+        "or else specialize the stdexec::enable_sender boolean trait for this type to true.");
+    } else if constexpr (!__detail::__consistent_completion_domains<_Sender>) {
+      static_assert(
+        __detail::__consistent_completion_domains<_Sender>,
+        "The completion schedulers of the sender do not have consistent domains. This is likely a "
+        "bug in the sender implementation.");
+    } else if constexpr (!move_constructible<__decay_t<_Sender>>) {
+      static_assert(
+        move_constructible<__decay_t<_Sender>>, //
+        "The sender type is not move-constructible.");
+    } else if constexpr (!constructible_from<__decay_t<_Sender>, _Sender>) {
+      static_assert(
+        constructible_from<__decay_t<_Sender>, _Sender>,
+        "The sender cannot be decay-copied. Did you forget a std::move?");
+    } else {
+      using _Completions = __completion_signatures_of_t<_Sender, _Env...>;
+      if constexpr (__same_as<_Completions, __unrecognized_sender_error<_Sender, _Env...>>) {
+        static_assert(
+          __mnever<_Completions>,
+          "The sender type was not able to report its completion signatures when asked. This is "
+          "either because it lacks the necessary member functions, or because the member functions "
+          "were ill-formed.\n\nA sender can declare its completion signatures in one of two ways:\n"
+          "  1. By defining a nested type alias named `completion_signatures` that is a\n"
+          "     specialization of stdexec::completion_signatures<...>.\n"
+          "  2. By defining a member function named `get_completion_signatures` that returns a\n"
+          "     specialization of stdexec::completion_signatures<...>.");
+      } else if constexpr (__merror<_Completions>) {
+        static_assert(
+          !__merror<_Completions>,
+          "Trying to compute the sender's completion signatures resulted in an error. See the rest "
+          "of the compiler diagnostic for clues. Look for the string \"_ERROR_\".");
+        // MSVC needs more encouragement to print the type of the error.
+        STDEXEC_MSVC(_Completions __what = 0;)
+      } else {
+        static_assert(
+          __valid_completion_signatures<_Completions>,
+          "The stdexec::sender_in<Sender, Environment> concept check has failed. This is likely a "
+          "bug in the sender implementation.");
+      }
+    }
+  }
 } // namespace stdexec

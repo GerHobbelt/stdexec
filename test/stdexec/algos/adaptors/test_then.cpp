@@ -34,7 +34,7 @@ namespace {
 
   TEST_CASE("then with environment returns a sender", "[adaptors][then]") {
     auto snd = ex::then(ex::just(), [] { });
-    static_assert(ex::sender_in<decltype(snd), empty_env>);
+    static_assert(ex::sender_in<decltype(snd), ex::env<>>);
     (void) snd;
   }
 
@@ -184,7 +184,7 @@ namespace {
   struct then_test_domain {
     template <class Sender, class... Env>
       requires std::same_as<ex::tag_of_t<Sender>, ex::then_t>
-    static auto transform_sender(Sender&& sndr, Env&&...) {
+    static auto transform_sender(Sender&&, Env&&...) {
       return ex::just(std::string{"ciao"});
     }
   };
