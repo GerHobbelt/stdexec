@@ -16,6 +16,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <numeric>
 
 #include <execpools/tbb/tbb_thread_pool.hpp>
 #include <exec/static_thread_pool.hpp>
