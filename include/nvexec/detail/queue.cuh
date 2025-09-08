@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// clang-format Language: Cpp
+
 #pragma once
 
 #include <cstddef>
@@ -24,7 +27,7 @@
 #include "throw_on_cuda_error.cuh"
 #include "memory.cuh"
 
-namespace nvexec::STDEXEC_STREAM_DETAIL_NS::queue {
+namespace nvexec::_strm::queue {
   struct task_base_t {
     using fn_t = void(task_base_t*) noexcept;
 
@@ -70,13 +73,13 @@ namespace nvexec::STDEXEC_STREAM_DETAIL_NS::queue {
       this->execute_ = [](task_base_t* t) noexcept {
       };
       this->free_ = [](task_base_t* t) noexcept {
-        STDEXEC_DBG_ERR(cudaFree(static_cast<void*>(t->atom_next_)));
+        STDEXEC_ASSERT_CUDA_API(cudaFree(static_cast<void*>(t->atom_next_)));
       };
       this->next_ = nullptr;
 
       constexpr std::size_t ptr_size = sizeof(this->atom_next_);
-      STDEXEC_DBG_ERR(cudaMalloc(&this->atom_next_, ptr_size));
-      STDEXEC_DBG_ERR(cudaMemset(static_cast<void*>(this->atom_next_), 0, ptr_size));
+      STDEXEC_TRY_CUDA_API(cudaMalloc(reinterpret_cast<void**>(&this->atom_next_), ptr_size));
+      STDEXEC_TRY_CUDA_API(cudaMemset(static_cast<void*>(this->atom_next_), 0, ptr_size));
     }
   };
 
@@ -128,8 +131,8 @@ namespace nvexec::STDEXEC_STREAM_DETAIL_NS::queue {
       , poller_(dev_id, head_.get()) {
     }
 
-    producer_t producer() {
+    auto producer() -> producer_t {
       return producer_t{tail_ptr_.get()};
     }
   };
-} // namespace nvexec::STDEXEC_STREAM_DETAIL_NS::queue
+} // namespace nvexec::_strm::queue

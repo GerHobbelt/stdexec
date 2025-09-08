@@ -23,6 +23,7 @@
 #include "nvexec/detail/variant.cuh"
 #include "common.cuh"
 
+STDEXEC_PRAGMA_PUSH()
 STDEXEC_PRAGMA_IGNORE_EDG(cuda_compile)
 
 using nvexec::variant_t;
@@ -76,12 +77,12 @@ namespace {
     REQUIRE(v->index_ == 0);
 
     kernel<<<1, 1>>>(v, 4.2);
-    THROW_ON_CUDA_ERROR(cudaDeviceSynchronize());
+    STDEXEC_TRY_CUDA_API(cudaDeviceSynchronize());
 
     visit([](auto alt) { REQUIRE(alt == 4.2); }, *v);
 
     kernel<<<1, 1>>>(v, 42);
-    THROW_ON_CUDA_ERROR(cudaDeviceSynchronize());
+    STDEXEC_TRY_CUDA_API(cudaDeviceSynchronize());
 
     visit([](auto alt) { REQUIRE(alt == 42); }, *v);
   }
@@ -145,3 +146,5 @@ namespace {
       1);
   }
 } // namespace
+
+STDEXEC_PRAGMA_POP()

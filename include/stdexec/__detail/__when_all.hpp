@@ -139,20 +139,14 @@ namespace stdexec {
             __concat_completion_signatures>...>;
     };
 
-    template <class _Tag, class _Receiver>
-    auto __complete_fn(_Tag, _Receiver& __rcvr) noexcept {
-      return [&]<class... _Ts>(_Ts&... __ts) noexcept {
-        _Tag()(static_cast<_Receiver&&>(__rcvr), static_cast<_Ts&&>(__ts)...);
-      };
-    }
-
     template <class _Receiver, class _ValuesTuple>
     void __set_values(_Receiver& __rcvr, _ValuesTuple& __values) noexcept {
       __values.apply(
-        [&](auto&... __opt_vals) noexcept -> void {
-          __tup::__cat_apply(__when_all::__complete_fn(set_value, __rcvr), *__opt_vals...);
+        [&]<class... OptTuples>(OptTuples&&... __opt_vals) noexcept -> void {
+          __tup::__cat_apply(
+            __mk_completion_fn(set_value, __rcvr), *static_cast<OptTuples&&>(__opt_vals)...);
         },
-        __values);
+        static_cast<_ValuesTuple&&>(__values));
     }
 
     template <class _Env, class _Sender>
@@ -211,7 +205,8 @@ namespace stdexec {
         case __error:
           if constexpr (!__same_as<_ErrorsVariant, __variant_for<>>) {
             // One or more child operations completed with an error:
-            __errors_.visit(__complete_fn(set_error, __rcvr), __errors_);
+            __errors_.visit(
+              __mk_completion_fn(set_error, __rcvr), static_cast<_ErrorsVariant&&>(__errors_));
           }
           break;
         case __stopped:
@@ -245,15 +240,10 @@ namespace stdexec {
     using __mk_state_fn_t = decltype(__when_all::__mk_state_fn(__declval<_Env>()));
 
     struct when_all_t {
-      // Used by the default_domain to find legacy customizations:
-      using _Sender = __1;
-      using __legacy_customizations_t = //
-        __types<tag_invoke_t(when_all_t, _Sender...)>;
-
       template <sender... _Senders>
-        requires __domain::__has_common_domain<_Senders...>
+        requires __has_common_domain<_Senders...>
       auto operator()(_Senders&&... __sndrs) const -> __well_formed_sender auto {
-        auto __domain = __domain::__common_domain_t<_Senders...>();
+        auto __domain = __common_domain_t<_Senders...>();
         return stdexec::transform_sender(
           __domain, __make_sexpr<when_all_t>(__(), static_cast<_Senders&&>(__sndrs)...));
       }
@@ -271,7 +261,7 @@ namespace stdexec {
 
       static constexpr auto get_attrs = //
         []<class... _Child>(__ignore, const _Child&...) noexcept {
-          using _Domain = __domain::__common_domain_t<_Child...>;
+          using _Domain = __common_domain_t<_Child...>;
           if constexpr (__same_as<_Domain, default_domain>) {
             return env();
           } else {
@@ -355,6 +345,7 @@ namespace stdexec {
           _Receiver& __rcvr,
           _Set,
           _Args&&... __args) noexcept -> void {
+        using _ValuesTuple = decltype(_State::__values_);
         if constexpr (__same_as<_Set, set_error_t>) {
           __set_error(__state, __rcvr, static_cast<_Args&&>(__args)...);
         } else if constexpr (__same_as<_Set, set_stopped_t>) {
@@ -365,20 +356,20 @@ namespace stdexec {
           if (__state.__state_.compare_exchange_strong(__expected, __stopped)) {
             __state.__stop_source_.request_stop();
           }
-        } else if constexpr (!__same_as<decltype(_State::__values_), __ignore>) {
+        } else if constexpr (!__same_as<_ValuesTuple, __ignore>) {
           // We only need to bother recording the completion values
           // if we're not already in the "error" or "stopped" state.
           if (__state.__state_.load() == __started) {
-            auto& __opt_values = __tup::get<__v<_Index>>(__state.__values_);
+            auto& __opt_values = _ValuesTuple::template __get<__v<_Index>>(__state.__values_);
             using _Tuple = __decayed_tuple<_Args...>;
             static_assert(
               __same_as<decltype(*__opt_values), _Tuple&>,
               "One of the senders in this when_all() is fibbing about what types it sends");
             if constexpr ((__nothrow_decay_copyable<_Args> && ...)) {
-              __opt_values.emplace(_Tuple{{static_cast<_Args&&>(__args)}...});
+              __opt_values.emplace(_Tuple{static_cast<_Args&&>(__args)...});
             } else {
               try {
-                __opt_values.emplace(_Tuple{{static_cast<_Args&&>(__args)}...});
+                __opt_values.emplace(_Tuple{static_cast<_Args&&>(__args)...});
               } catch (...) {
                 __set_error(__state, __rcvr, std::current_exception());
               }
@@ -391,14 +382,10 @@ namespace stdexec {
     };
 
     struct when_all_with_variant_t {
-      using _Sender = __1;
-      using __legacy_customizations_t = //
-        __types<tag_invoke_t(when_all_with_variant_t, _Sender...)>;
-
       template <sender... _Senders>
-        requires __domain::__has_common_domain<_Senders...>
+        requires __has_common_domain<_Senders...>
       auto operator()(_Senders&&... __sndrs) const -> __well_formed_sender auto {
-        auto __domain = __domain::__common_domain_t<_Senders...>();
+        auto __domain = __common_domain_t<_Senders...>();
         return stdexec::transform_sender(
           __domain,
           __make_sexpr<when_all_with_variant_t>(__(), static_cast<_Senders&&>(__sndrs)...));
@@ -420,7 +407,7 @@ namespace stdexec {
     struct __when_all_with_variant_impl : __sexpr_defaults {
       static constexpr auto get_attrs = //
         []<class... _Child>(__ignore, const _Child&...) noexcept {
-          using _Domain = __domain::__common_domain_t<_Child...>;
+          using _Domain = __common_domain_t<_Child...>;
           if constexpr (same_as<_Domain, default_domain>) {
             return env();
           } else {
@@ -437,13 +424,8 @@ namespace stdexec {
     };
 
     struct transfer_when_all_t {
-      using _Sched = __0;
-      using _Sender = __1;
-      using __legacy_customizations_t = //
-        __types<tag_invoke_t(transfer_when_all_t, _Sched, _Sender...)>;
-
       template <scheduler _Scheduler, sender... _Senders>
-        requires __domain::__has_common_domain<_Senders...>
+        requires __has_common_domain<_Senders...>
       auto
         operator()(_Scheduler __sched, _Senders&&... __sndrs) const -> __well_formed_sender auto {
         auto __domain = query_or(get_domain, __sched, default_domain());
@@ -482,13 +464,8 @@ namespace stdexec {
     };
 
     struct transfer_when_all_with_variant_t {
-      using _Sched = __0;
-      using _Sender = __1;
-      using __legacy_customizations_t = //
-        __types<tag_invoke_t(transfer_when_all_with_variant_t, _Sched, _Sender...)>;
-
       template <scheduler _Scheduler, sender... _Senders>
-        requires __domain::__has_common_domain<_Senders...>
+        requires __has_common_domain<_Senders...>
       auto
         operator()(_Scheduler&& __sched, _Senders&&... __sndrs) const -> __well_formed_sender auto {
         auto __domain = query_or(get_domain, __sched, default_domain());

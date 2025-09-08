@@ -22,7 +22,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // Example code:
-int main(void) {
+auto main() -> int {
   auto x = then(stdexec::just(42), [](int i) {
     std::printf("Got: %d\n", i);
     return i;

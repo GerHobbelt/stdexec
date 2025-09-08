@@ -3,9 +3,9 @@
 #include <exec/env.hpp>
 #include <exec/just_from.hpp>
 #include <exec/static_thread_pool.hpp>
+#include <exec/just_from.hpp>
 #include "test_common/schedulers.hpp"
 #include "test_common/receivers.hpp"
-#include "test_common/type_helpers.hpp"
 
 namespace ex = stdexec;
 using exec::async_scope;
@@ -32,8 +32,8 @@ namespace {
     struct operation {
       Receiver rcvr_;
 
-      friend void tag_invoke(ex::start_t, operation& self) noexcept {
-        ex::set_value(std::move(self.rcvr_));
+      void start() & noexcept {
+        ex::set_value(std::move(rcvr_));
       }
     };
 

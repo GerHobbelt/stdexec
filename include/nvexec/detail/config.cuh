@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
+// clang-format Language: Cpp
 // IWYU pragma: always_keep
+
+#pragma once
 
 #include "../../stdexec/__detail/__config.hpp" // IWYU pragma: export
 
@@ -23,8 +25,6 @@
 #  error The NVIDIA schedulers and utilities require CUDA support
 #endif
 
-#define STDEXEC_STREAM_DETAIL_NS _strm
-
-namespace nvexec::STDEXEC_STREAM_DETAIL_NS {
+namespace nvexec::_strm {
   using namespace stdexec;
-} // namespace nvexec::STDEXEC_STREAM_DETAIL_NS
+} // namespace nvexec::_strm

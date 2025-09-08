@@ -15,7 +15,12 @@
  */
 #pragma once
 
-// Assumes STDEXEC_SYSTEM_CONTEXT_INLINE is defined
+// This file assumes STDEXEC_SYSTEM_CONTEXT_INLINE is defined before including it.
+// But clang-tidy doesn't know that, so we need to include the header that defines
+// it when clang-tidy is invoked.
+#if defined(STDEXEC_CLANG_TIDY_INVOKED)
+#  include "../system_context.hpp" // IWYU pragma: keep
+#endif
 
 #if !defined(STDEXEC_SYSTEM_CONTEXT_INLINE)
 #  error "STDEXEC_SYSTEM_CONTEXT_INLINE must be defined before including this header"
@@ -26,33 +31,22 @@
 #define __STDEXEC_SYSTEM_CONTEXT_API extern STDEXEC_SYSTEM_CONTEXT_INLINE STDEXEC_ATTRIBUTE((weak))
 
 namespace exec::system_context_replaceability {
-  /// The default implementation of the `query_system_context` function template.
-  template <__queryable_interface _Interface>
-  __STDEXEC_SYSTEM_CONTEXT_API std::shared_ptr<_Interface> query_system_context() {
-    return {};
+
+  /// Get the backend for the parallel scheduler.
+  /// Users might replace this function.
+  auto query_parallel_scheduler_backend() -> std::shared_ptr<parallel_scheduler_backend> {
+    return __system_context_default_impl::__parallel_scheduler_backend_singleton
+      .__get_current_instance();
   }
 
-  /// The default specialization of `query_system_context` for `system_scheduler`.
-  template <>
-  std::shared_ptr<system_scheduler> query_system_context<system_scheduler>() {
-    return __system_context_default_impl::__system_scheduler_singleton.__get_current_instance();
+  /// Set a factory for the parallel scheduler backend.
+  /// Can be used to replace the parallel scheduler at runtime.
+  /// Out of spec.
+  auto set_parallel_scheduler_backend(__parallel_scheduler_backend_factory __new_factory)
+    -> __parallel_scheduler_backend_factory {
+    return __system_context_default_impl::__parallel_scheduler_backend_singleton
+      .__set_backend_factory(__new_factory);
   }
 
-  /// The default implementation of the `set_system_context_backend_factory` function template.
-  template <__queryable_interface _Interface>
-  __STDEXEC_SYSTEM_CONTEXT_API __system_context_backend_factory<_Interface>
-    set_system_context_backend_factory(__system_context_backend_factory<_Interface> __new_factory) {
-    return nullptr;
-  }
-
-  /// The default specialization of `set_system_context_backend_factory` for `system_scheduler`.
-  template <>
-  __system_context_backend_factory<system_scheduler>
-    set_system_context_backend_factory<system_scheduler>(
-      __system_context_backend_factory<system_scheduler> __new_factory) {
-    return __system_context_default_impl::__system_scheduler_singleton.__set_backend_factory(
-      __new_factory);
-  }
-
-
+STDEXEC_PRAGMA_POP()
 } // namespace exec::system_context_replaceability
