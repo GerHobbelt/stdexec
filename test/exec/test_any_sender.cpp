@@ -17,7 +17,9 @@
 #include <exec/any_sender_of.hpp>
 #include <exec/inline_scheduler.hpp>
 #include <exec/when_any.hpp>
+#include <exec/env.hpp>
 #include <exec/static_thread_pool.hpp>
+#include <stdexec/stop_token.hpp>
 
 #include <test_common/schedulers.hpp>
 #include <test_common/receivers.hpp>
@@ -32,15 +34,7 @@ namespace {
   ///////////////////////////////////////////////////////////////////////////////
   //                                                             any_receiver_ref
 
-  struct get_address_t : stdexec::__query<get_address_t> {
-    template <class T>
-    // BUGBUG ambiguous!
-      requires stdexec::tag_invocable<get_address_t, T>
-    auto operator()(T&& t) const noexcept(stdexec::nothrow_tag_invocable<get_address_t, T>)
-      -> stdexec::tag_invoke_result_t<get_address_t, T> {
-      return stdexec::tag_invoke(*this, static_cast<T&&>(t));
-    }
-  };
+  struct get_address_t : stdexec::__query<get_address_t> { };
 
   inline constexpr get_address_t get_address;
 
@@ -501,6 +495,27 @@ namespace {
     stdexec::start(do_check);
   }
 
+  TEST_CASE(
+    "any_sender - get_completion_signatures is constrained with respect to stop-token"
+    "receiver stop_token queries",
+    "[types][any_sender]") {
+    using Sigs = completion_signatures<set_value_t(), set_stopped_t()>;
+    using receiver_ref =
+      any_receiver_ref<Sigs, get_stop_token.signature<inplace_stop_token() noexcept>>;
+    using sender = receiver_ref::any_sender<>;
+    static_assert(requires {
+      {
+        stdexec::get_completion_signatures(std::declval<sender>())
+      } -> same_as<_ERROR_<__detail::__dependent_completions>>;
+    });
+    using env = make_env_t<prop<get_stop_token_t, inplace_stop_token>>;
+    static_assert(requires {
+      { stdexec::get_completion_signatures(std::declval<sender>(), std::declval<env>()) }
+        -> same_as<Sigs>
+      ;
+    });
+  }
+
   ///////////////////////////////////////////////////////////////////////////////
   //                                                                any_scheduler
 
@@ -526,7 +541,7 @@ namespace {
 
   TEST_CASE("queryable any_scheduler with inline_scheduler", "[types][any_sender]") {
     using my_scheduler2 =
-      my_scheduler<get_forward_progress_guarantee.signature<forward_progress_guarantee()>>;
+      my_scheduler<get_forward_progress_guarantee.signature<forward_progress_guarantee() noexcept>>;
     static_assert(scheduler<my_scheduler2>);
     my_scheduler2 scheduler = stdexec::inline_scheduler();
     my_scheduler2 copied = scheduler;
@@ -606,8 +621,8 @@ namespace {
   }
 
   TEST_CASE("queryable any_scheduler with static_thread_pool", "[types][any_sender]") {
-    using my_scheduler =
-      stoppable_scheduler<get_forward_progress_guarantee.signature<forward_progress_guarantee()>>;
+    using my_scheduler = stoppable_scheduler<get_forward_progress_guarantee
+                                               .signature<forward_progress_guarantee() noexcept>>;
 
     exec::static_thread_pool pool(1);
     my_scheduler scheduler = pool.get_scheduler();
